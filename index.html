@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+
+<style id="webmakerstyle">
+
+</style>
+</head>
+<body>
+<canvas id="canvas" width=310 height=100>
+  your browser is not supported canvas.
+</canvas><br>
+
+<table>
+  <tr>
+    <td>比例ゲイン</td>
+    <td><input type="number" id="kp" value="100"></td>
+  </tr>
+  <tr>
+    <td>積分ゲイン</td>
+    <td><input type="number" id="ki" value="3"></td>
+  </tr>
+  <tr>
+    <td>微分ゲイン</td>
+    <td><input type="number" id="kd" value="300"></td>
+  </tr>
+  <tr>
+    <td>錘の質量</td>
+    <td><input type="number" id="m" value="0.2"></td>
+  </tr>
+  <tr>
+    <td>バネ定数</td>
+    <td><input type="number" id="k" value="3"></td>
+  </tr>
+  <tr>
+    <td>粘性係数</td>
+    <td><input type="number" id="c" value="10" value="0.5"></td>
+  </tr>
+</table><br>
+<input id="btn" type="button" value="更新" onclick="updateController()">
+
+<script>
+/*
+
+PID Control Simulator
+written by Wakayama Takumi (2SC1815)
+
+Used Webmaker (https://webmaker.app/)
+
+*/
+
+
+// constants
+const canvasName = "canvas"
+const Framerate = 100/6
+
+// variables
+
+let input = {"kp":null, "ki":null, "kd":null, "m":null, "k":null, "c":null}
+
+let controller = null
+
+let dispW= 0
+let dispH = 0
+
+// Mass-Spring-Damper System
+class MSD {
+	
+	constructor(k, m, c) {
+		
+		this.def = 0
+		this.spring = k
+		this.mass = m
+		this.damper = c
+		
+		this.Y = this.def
+		this.v = 0
+		this.a = 0
+		
+	}
+	
+	y(f, dt) {
+		
+		
+		this.a = (f + ((this.def - this.Y) * this.spring) - (this.v * this.damper)) / this.mass
+		this.v += this.a *dt
+		this.Y += this.v * dt
+		return this.Y
+		
+	}
+	
+}
+
+
+class PID {
+	
+	constructor() {
+		
+		this.t = 0
+		this.r = 0
+		
+		this.diff = 0
+		this.inte = 0
+		
+		//this.input = (t) => {return ((t%5)<=0.1) ? 50 : 0}
+		this.input = (t) => {return ((t%10)<=5) ? 0 : 1}
+		
+		this.system = new MSD(3, 0.2, 0.5)
+		
+		this.kp = 50
+		this.kd = 100
+		this.ki = 0.5
+		
+	}
+	
+	draw(c) {
+		
+		c.clearRect(0, 0, dispW,dispH)
+		c.fillStyle = 'rgb(0, 0, 0)';
+		
+		for (let i=0; i<300; i+=10) {
+
+			c.strokeStyle = 'rgb(0, 0, 0)';
+			c.beginPath()
+			c.moveTo(i+10, 0)
+			c.lineTo(i+10, 40+(i%50==0?10:0))
+			c.stroke()
+		}
+		
+		c.strokeStyle = 'rgb(255,0,51)';
+		c.strokeRect((this.r*100) +155,50, 10, 10);
+		
+		c.fillStyle = 'rgb(153,255,51)';
+		
+		c.fillRect((this.system.Y*100) +155, 50, 10, 10);
+		
+	}
+	
+	step(dt) {
+		
+		this.r = this.input(this.t)
+		
+		let e = this.r - this.system.Y
+		
+		this.inte += e
+		
+		let c = (e * this.kp) + (this.inte * this.ki) + ((e-this.diff) * this.kd)
+		
+		this.diff = e
+		
+		let y = this.system.y(c, dt)
+		
+		
+		this.t+=dt
+		
+	}
+	
+}
+
+
+// function define
+
+// プログラムが開始されると呼ばれるやつ
+function main() {
+
+	const cv = document.getElementById(canvasName)
+	
+	for (let key in input) {
+		input[key] = document.getElementById(key)
+	}
+
+	if (!cv.getContext) return;
+	
+	getSize()
+
+	const ct = cv.getContext("2d");
+
+	controller = new PID()
+	
+	updateController()
+
+	setInterval(() => { controller.draw(ct) }, Framerate)
+	
+	setInterval(()=>{ controller.step(10/1000)}, 10)
+
+}
+
+function updateController() {
+	
+	
+	controller.kp = parseInt(input["kp"].value, 10)
+	controller.ki = parseInt(input["ki"].value, 10)
+	controller.kd = parseInt(input["kd"].value, 10)
+	
+	controller.system.m = parseInt(input["m"].value, 10)
+	controller.system.k = parseInt(input["k"].value, 10)
+	controller.system.c = parseInt(input["c"].value, 10)
+	
+}
+
+function getSize() {
+	
+	const cv = document.getElementById(canvasName);
+
+	//cv.width = document.documentElement.clientWidth
+	//cv.height = document.documentElement.clientHeight
+	dispW = cv.width
+	dispH = cv.height
+	
+}
+
+
+//メニュー描画
+function drawMenu(c) {
+
+		c.fillStyle = 'rgb(0, 250, 250)';
+		c.fillRect(0,y*tabSize, menuSize,tabSize);
+		
+	
+}
+
+//回路描画
+function drawCircuits(c) {
+	
+	for (let p of circuits) {
+		p.drawLine(c)
+	}
+
+	if (connectFrom != null && selectMenu.title == "Make Connection") {
+
+		let mousep = new Pos(0, 0)
+		mousep.fromMouseHr(mx, my)
+		c.strokeStyle = "rgb(20, 200, 200)" ;
+		drawLines(c, lines, connectFrom.pos, mousep)
+
+	}
+
+	for (let p of circuits) {
+		let f1 = connectFrom == null || (focused != null && focused.isConnectable(connectFrom))
+		p.draw(c, (p == focused &&f1) || p == connectFrom)
+	}
+
+}
+
+//画面描画
+function draw(c) {
+	
+	c.clearRect(0, 0, dispW,dispH)
+	c.fillStyle = 'rgb(200, 200, 200)';
+	c.fillRect(0,0, dispW,dispH);
+
+	if (mx > menuSize) {
+
+		c.beginPath () ;
+		c.arc( cursor.cx(), cursor.cy(), 5 * zoom, 0 * Math.PI / 180, 360 * Math.PI / 180, false ) ;
+
+		c.strokeStyle = "rgb(0, 0, 0)" ;
+
+		c.stroke() 
+
+	} 
+
+	drawCircuits(c)
+
+	c.fillStyle = 'rgb(250, 250, 250)';
+	c.fillRect(0,0, menuSize, dispH);
+	
+	drawMenu(c)
+	
+}
+
+
+
+// start program
+
+main()
+//# sourceURL=userscript.js
+</script>
+</body>
+</html>
